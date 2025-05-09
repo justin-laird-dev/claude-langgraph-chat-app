@@ -1,0 +1,16 @@
+# API and Environment
+anthropic>=0.8.0
+python-dotenv==1.0.0
+langchain>=0.1.0
+langchain-anthropic>=0.1.0
+langgraph>=0.0.20
+
+# Web Framework
+flask==2.3.3
+flask-socketio==5.3.6
+
+# WSGI Server
+gunicorn==21.2.0
+
+# Utils
+requests==2.31.0 

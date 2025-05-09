@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Claude Chat</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <h1>Claude Chat</h1>
+            <div class="model-info">Model: {{ model }}</div>
+        </div>
+        
+        <div class="chat-messages" id="chat-messages">
+            <div class="message system">
+                <div class="message-content">
+                    <p>Hello! I'm Claude. How can I help you today?</p>
+                </div>
+            </div>
+            {% for message in chat_history %}
+                <div class="message {{ message.role }}">
+                    <div class="message-content">
+                        <p>{{ message.text|safe }}</p>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+        
+        <div class="typing-indicator" id="typing-indicator" style="display: none;">
+            <div class="dot"></div>
+            <div class="dot"></div>
+            <div class="dot"></div>
+        </div>
+        
+        <div class="chat-input-container">
+            <form id="chat-form">
+                <textarea id="user-input" placeholder="Type your message here..." rows="3"></textarea>
+                <button type="submit" id="send-button">Send</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
+</body>
+</html> 
