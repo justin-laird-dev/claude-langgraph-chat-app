@@ -46,8 +46,7 @@ class ClaudeLangGraphAgent:
             self.llm = ChatAnthropic(
                 model=self.model,                
                 # anthropic_api_key=api_key, # REMOVED - Let ChatAnthropic find it from env
-                max_tokens=self.max_tokens,
-                streaming=True
+                max_tokens=self.max_tokens
             )
             logger.info(f"ChatAnthropic initialized successfully with model: {self.model}")
             
@@ -119,7 +118,11 @@ class ClaudeLangGraphAgent:
         
         try:
             logger.info(f"Streaming from LLM. Message count: {len(messages_to_send)}")
-            for chunk in self.llm.stream(messages_to_send):
+            # Make sure not to pass streaming=True to the stream method
+            # The LLM was initialized with model_kwargs={"streaming": True}
+            # But we should not pass it here for the Messages API
+            kwargs = {}  # Empty kwargs to avoid passing streaming parameter
+            for chunk in self.llm.stream(messages_to_send, **kwargs):
                 if chunk.content:
                     yield chunk.content
         except Exception as e:

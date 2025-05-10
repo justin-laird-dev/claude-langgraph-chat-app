@@ -11,6 +11,7 @@ A real-time web-based chat application powered by Anthropic's Claude AI, impleme
 - **System Prompt Support**: Customize Claude's behavior with system prompts
 - **Error Handling**: Graceful handling of API errors with informative messages
 - **Support for Claude 3.7**: Compatible with the latest Claude models
+- **Graph Visualization**: Generate PNG diagrams of the LangGraph agent structure
 
 ## Getting Started
 
@@ -22,12 +23,10 @@ A real-time web-based chat application powered by Anthropic's Claude AI, impleme
 ### Installation
 
 1. **Clone or download this repository**
-
 2. **Create a virtual environment**:
    ```bash
    python -m venv venv
    ```
-
 3. **Activate the virtual environment**:
    - On macOS/Linux:
      ```bash
@@ -37,12 +36,10 @@ A real-time web-based chat application powered by Anthropic's Claude AI, impleme
      ```bash
      venv\Scripts\activate
      ```
-
 4. **Install the required dependencies**:
    ```bash
    pip install -r requirements.txt
    ```
-
 5. **Create a `.env` file** in the project root directory with the following contents:
    ```
    ANTHROPIC_API_KEY=your_actual_api_key_here
@@ -54,17 +51,48 @@ A real-time web-based chat application powered by Anthropic's Claude AI, impleme
    ```
    Replace `your_actual_api_key_here` with your Anthropic API key.
 
-### Running the Application
+## Command Line Usage
 
-1. **Start the Flask server**:
-   ```bash
-   python app.py
-   ```
+### 1. Create and activate your virtual environment
 
-2. **Access the application** by opening a web browser and navigating to:
-   ```
-   http://localhost:8080
-   ```
+Create the virtual environment:
+```bash
+python -m venv venv
+```
+
+Activate it:
+- On macOS/Linux:
+  ```bash
+  source venv/bin/activate
+  ```
+- On Windows:
+  ```bash
+  venv\Scripts\activate
+  ```
+
+### 2. Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 3. Set up your environment variables
+
+Create a `.env` file in the project directory with your Anthropic API key and other settings (see example in "Getting Started").
+
+### 4. Run the web application
+
+```bash
+python app.py
+```
+Then open [http://localhost:8080](http://localhost:8080) in your browser.
+
+### 5. Generate a PNG diagram of the agent graph
+
+```bash
+python generate_mermaid_diagram.py
+```
+This will create a `graph.png` file in the current directory.
 
 ## Project Structure
 
@@ -74,6 +102,7 @@ A real-time web-based chat application powered by Anthropic's Claude AI, impleme
 - **templates/index.html**: HTML template for the chat interface
 - **static/css/style.css**: CSS styling for the application
 - **static/js/chat.js**: JavaScript for managing the chat interface and streaming
+- **generate_mermaid_diagram.py**: Script for generating agent structure diagrams
 - **requirements.txt**: Python dependencies
 
 ## LangGraph Architecture

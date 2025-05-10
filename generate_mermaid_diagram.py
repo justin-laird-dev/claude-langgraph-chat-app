@@ -5,47 +5,50 @@ Generate a PNG diagram from the LangGraph agent graph
 import os
 import sys
 from dotenv import load_dotenv
-from langchain_core.runnables.graph import MermaidDrawMethod
 
-def generate_diagram():
-    # Load environment variables required by the agent
-    load_dotenv()
-    
+# Import the MermaidDrawMethod, trying both possible import paths
+try:
+    from langchain_core.runnables.graph import CurveStyle, MermaidDrawMethod, NodeStyles
+except ImportError:
+    # This might be a newer version with a different import structure
     try:
-        # Import the agent class that contains the graph
+        from langchain.graphs import CurveStyle, MermaidDrawMethod, NodeStyles
+    except ImportError:
+        print("Unable to import diagram generation classes")
+        sys.exit(1)
+
+def save_graph_visualization(output_file="graph.png"):
+    """Save the graph visualization as PNG using Mermaid + Pyppeteer."""
+    try:
+        # Load environment variables for API keys
+        load_dotenv()
+        
+        # Initialize agent and get its graph
         from utils.langgraph_agent import ClaudeLangGraphAgent
-        
-        print("Initializing the agent from langgraph_agent.py...")
         agent = ClaudeLangGraphAgent()
-        
-        # Get the graph from the agent instance
         graph = agent.graph
         
-      
-        # Generate PNG using the API
-        png_file = "graph.png"
-        print(f"Generating PNG visualization to {png_file}...")
-        
-        # Generate PNG data using Mermaid.ink API
-        png_data = graph.get_graph().draw_mermaid_png(
-            draw_method=MermaidDrawMethod.API
+        # Get the graph and generate PNG
+        print(f"Generating graph visualization to {output_file}...")
+        graph.get_graph().draw_mermaid_png(
+            curve_style=CurveStyle.LINEAR,
+            node_colors=NodeStyles(
+                first="#ffdfba",
+                last="#baffc9", 
+                default="#fad7de"
+            ),
+            wrap_label_n_words=9,
+            output_file_path=output_file,
+            draw_method=MermaidDrawMethod.PYPPETEER,
+            background_color="white",
+            padding=10,
         )
-        
-        # Save the PNG data to a file
-        with open(png_file, "wb") as f:
-            f.write(png_data)
-        
-        print(f"PNG saved to {os.path.abspath(png_file)}")
-        return True
+        print(f"Graph visualization saved to {output_file}")
         
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"Error generating graph visualization: {str(e)}")
         import traceback
         traceback.print_exc()
-        print("\nMake sure you have valid API credentials in your .env file.")
-        return False
 
 if __name__ == "__main__":
-    print("=== Generating PNG diagram from LangGraph Agent ===")
-    success = generate_diagram()
-    sys.exit(0 if success else 1) 
+    save_graph_visualization() 
