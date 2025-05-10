@@ -10,7 +10,6 @@ from langgraph.graph import StateGraph, END
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-import anthropic
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -42,20 +41,6 @@ class ClaudeLangGraphAgent:
 
         self.max_tokens = int(os.getenv("MAX_TOKENS", "4000"))
 
-        # Test the API key and model with a direct client call first to be sure
-        try:
-            logger.info(f"Pre-validating API key and model '{self.model}' with direct anthropic.Anthropic client...")
-            direct_client = anthropic.Anthropic(api_key=api_key_env.strip()) # Use the env key
-            direct_response = direct_client.messages.create(
-                model=self.model, 
-                max_tokens=10, 
-                messages=[{"role": "user", "content": "Hello for pre-validation"}]
-            )
-            logger.info(f"Direct pre-validation successful: {direct_response.content[0].text[:30]}...")
-        except Exception as direct_e:
-            logger.error(f"Direct pre-validation FAILED: {type(direct_e).__name__} - {str(direct_e)}")
-            raise ValueError(f"Direct API pre-validation failed. Check key/model/credits. Error: {str(direct_e)}") from direct_e
-
         try:
             logger.info(f"Attempting to initialize ChatAnthropic with model: {self.model} (relying on env var for key)")
             self.llm = ChatAnthropic(
@@ -68,10 +53,6 @@ class ClaudeLangGraphAgent:
             
             self._build_agent()
 
-        except anthropic.AuthenticationError as e:
-            logger.error(f"AuthenticationError during ChatAnthropic init: {e.status_code} - {e.message}")
-            logger.error(f"Response body if available: {e.response.text if hasattr(e, 'response') and e.response else 'N/A'}")
-            raise ValueError(f"Failed to initialize ChatAnthropic due to AuthenticationError: {e.message}. ANTHROPIC_API_KEY in env may be incorrect or LangChain has an issue.") from e
         except Exception as e:
             logger.error(f"Unexpected error during ChatAnthropic init: {type(e).__name__} - {str(e)}")
             logger.error(traceback.format_exc())
