@@ -1,9 +1,10 @@
 import os
 import traceback
 import logging
-from flask import Flask, render_template, session
+from flask import Flask, render_template, session, request, redirect, url_for, jsonify
 from flask_socketio import SocketIO
 import secrets
+import uuid
 from dotenv import load_dotenv
 import anthropic
 
@@ -81,7 +82,7 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 try:
     if api_key: # Only attempt if API key was ostensibly loaded
         logger.info("Attempting to initialize ClaudeLangGraphAgent...")
-        claude_agent = ClaudeLangGraphAgent()
+        claude_agent = ClaudeLangGraphAgent(use_mongo_checkpointer=True)
         logger.info("Claude LangGraph agent initialized successfully")
     else:
         logger.error("Skipping ClaudeLangGraphAgent initialization due to missing API key.")
@@ -97,6 +98,13 @@ def get_chat_history():
         session['chat_history'] = []
     return session['chat_history']
 
+def get_thread_id():
+    if 'thread_id' not in session:
+        # Generate a new thread ID
+        session['thread_id'] = str(uuid.uuid4())
+        logger.info(f"Generated new thread ID: {session['thread_id']}")
+    return session['thread_id']
+
 def add_to_chat_history(role, text):
     chat_history = get_chat_history()
     chat_history.append({"role": role, "text": text})
@@ -105,6 +113,31 @@ def add_to_chat_history(role, text):
 
 @app.route('/')
 def index():
+    # Get or create thread ID
+    thread_id = get_thread_id()
+    
+    # Try to load conversation history from MongoDB if this is the first page load
+    if thread_id and not session.get('history_loaded') and claude_agent:
+        try:
+            stored_messages = claude_agent.get_conversation_history(thread_id)
+            if stored_messages:
+                # Convert LangChain message objects to our format
+                chat_history = []
+                for msg in stored_messages:
+                    if hasattr(msg, 'type') and msg.type == 'human':
+                        chat_history.append({"role": "user", "text": msg.content})
+                    elif hasattr(msg, 'type') and msg.type == 'ai':
+                        chat_history.append({"role": "assistant", "text": msg.content})
+                
+                # Update session history
+                if chat_history:
+                    logger.info(f"Loaded {len(chat_history)} messages from MongoDB for thread {thread_id}")
+                    session['chat_history'] = chat_history
+                    session['history_loaded'] = True
+        except Exception as e:
+            logger.error(f"Error loading history from MongoDB: {str(e)}")
+            logger.error(traceback.format_exc())
+    
     # Get the chat history from the session
     chat_history = get_chat_history()
     
@@ -112,7 +145,57 @@ def index():
     current_model_for_ui = os.getenv("CLAUDE_MODEL", "(model not set)")
     logger.info(f"Current model for UI: {current_model_for_ui}")
     
-    return render_template('index.html', chat_history=chat_history, model=current_model_for_ui)
+    # Pass thread_id to the template
+    return render_template('index.html', 
+                          chat_history=chat_history, 
+                          model=current_model_for_ui,
+                          thread_id=thread_id)
+
+@app.route('/new_chat')
+def new_chat():
+    # Clear chat history and generate new thread ID
+    session['chat_history'] = []
+    session['thread_id'] = str(uuid.uuid4())
+    session['history_loaded'] = False
+    logger.info(f"Started new conversation with thread ID: {session['thread_id']}")
+    return redirect(url_for('index'))
+
+@app.route('/api/threads')
+def get_threads():
+    """API endpoint to get all available threads."""
+    if not claude_agent or not claude_agent.checkpointer:
+        return jsonify({"error": "MongoDB checkpointer not available"}), 500
+    
+    try:
+        # Get all thread IDs from MongoDB
+        thread_ids = claude_agent.checkpointer.list_thread_ids()
+        
+        # Mark the current thread
+        current_thread_id = get_thread_id()
+        threads = []
+        
+        for thread in thread_ids:
+            threads.append({
+                "id": thread["id"],
+                "message_count": thread["message_count"],
+                "timestamp": thread.get("timestamp"),
+                "is_current": thread["id"] == current_thread_id
+            })
+        
+        return jsonify({"threads": threads})
+    except Exception as e:
+        logger.error(f"Error getting threads: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/switch_thread/<thread_id>')
+def switch_thread(thread_id):
+    """Switch to a different conversation thread."""
+    # Update the session thread ID
+    session['thread_id'] = thread_id
+    session['chat_history'] = []
+    session['history_loaded'] = False
+    logger.info(f"Switched to thread ID: {thread_id}")
+    return redirect(url_for('index'))
 
 @socketio.on('connect')
 def handle_connect():
@@ -134,6 +217,9 @@ def handle_message(data):
     # Get the chat history in the format needed for the LangGraph agent
     chat_history = get_chat_history()
     
+    # Get thread ID for persistence
+    thread_id = get_thread_id()
+    
     # Create a system prompt
     system_prompt = "You are Claude, a helpful and friendly AI assistant. Be concise in your responses."
     
@@ -151,8 +237,8 @@ def handle_message(data):
     # Stream the response from Claude using LangGraph
     assistant_response = ""
     try:
-        logger.info("Starting streaming response from Claude using LangGraph")
-        for chunk in claude_agent.chat_stream(chat_history, system_prompt):
+        logger.info(f"Starting streaming response from Claude using LangGraph (thread_id: {thread_id})")
+        for chunk in claude_agent.chat_stream(chat_history, system_prompt, thread_id):
             if chunk:
                 new_text = chunk
                 assistant_response += new_text
@@ -168,7 +254,7 @@ def handle_message(data):
     if not assistant_response and claude_agent: # Check claude_agent again
         logger.info("Streaming failed, trying non-streaming API call")
         try:
-            assistant_response = claude_agent.chat(chat_history, system_prompt)
+            assistant_response = claude_agent.chat(chat_history, system_prompt, thread_id)
             socketio.emit('response_chunk', {'chunk': assistant_response})
         except Exception as e:
             error_msg = str(e)

@@ -8,10 +8,50 @@ document.addEventListener('DOMContentLoaded', function() {
     const chatMessages = document.getElementById('chat-messages');
     const sendButton = document.getElementById('send-button');
     const typingIndicator = document.getElementById('typing-indicator');
+    const threadSelector = document.getElementById('thread-selector');
     
     // Variable to hold the current message being received
     let currentMessageElement = null;
     let isReceivingMessage = false;
+    
+    // Fetch available threads
+    function fetchThreads() {
+        fetch('/api/threads')
+            .then(response => response.json())
+            .then(data => {
+                if (data.threads && data.threads.length > 0) {
+                    // Clear existing options except the first one (current thread)
+                    while (threadSelector.options.length > 1) {
+                        threadSelector.remove(1);
+                    }
+                    
+                    // Add thread options
+                    data.threads.forEach(thread => {
+                        // Skip the current thread as it's already in the dropdown
+                        if (!thread.is_current) {
+                            const option = document.createElement('option');
+                            option.value = thread.id;
+                            const truncatedId = thread.id.substring(0, 8);
+                            const formattedDate = thread.timestamp ? new Date(thread.timestamp).toLocaleString() : 'Unknown';
+                            option.textContent = `Thread ${truncatedId}... (${thread.message_count} msgs, ${formattedDate})`;
+                            threadSelector.appendChild(option);
+                        }
+                    });
+                }
+            })
+            .catch(error => console.error('Error fetching threads:', error));
+    }
+    
+    // Handle thread selection
+    threadSelector.addEventListener('change', function() {
+        const selectedThreadId = this.value;
+        if (selectedThreadId) {
+            window.location.href = `/switch_thread/${selectedThreadId}`;
+        }
+    });
+    
+    // Fetch threads when the page loads
+    fetchThreads();
     
     // Handle form submission
     chatForm.addEventListener('submit', function(e) {
@@ -82,6 +122,9 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Focus on the input field
         userInput.focus();
+        
+        // Refresh thread list after a completed conversation
+        fetchThreads();
     });
     
     // Function to add a message to the chat

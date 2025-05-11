@@ -11,7 +11,21 @@
     <div class="chat-container">
         <div class="chat-header">
             <h1>Claude Chat</h1>
-            <div class="model-info">Model: {{ model }}</div>
+            <div class="model-info">
+                <div>Model: {{ model }}</div>
+                <div class="thread-controls">
+                    <div class="thread-dropdown">
+                        <select id="thread-selector">
+                            <option value="{{ thread_id }}" selected>Current Thread ({{ thread_id[:8] }}...)</option>
+                            <!-- Will be populated via JavaScript -->
+                        </select>
+                    </div>
+                    <div class="thread-info">Thread ID: {{ thread_id }}</div>
+                    <div class="new-chat-button">
+                        <a href="{{ url_for('new_chat') }}" class="new-chat-link">New Chat</a>
+                    </div>
+                </div>
+            </div>
         </div>
         
         <div class="chat-messages" id="chat-messages">
