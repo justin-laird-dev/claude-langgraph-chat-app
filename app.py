@@ -102,6 +102,54 @@ def index():
     # Pass empty chat history to template - frontend will manage display
     return render_template('index.html', chat_history=[], model=current_model_for_ui)
 
+@app.route('/conversation_history')
+def conversation_history():
+    """Get the current conversation history from LangGraph checkpointer."""
+    if claude_agent is None:
+        return {"error": "Agent not initialized"}, 500
+    
+    thread_id = "webapp_conversation"
+    try:
+        history = claude_agent.get_conversation_history(thread_id)
+        return {"history": history}
+    except Exception as e:
+        logger.error(f"Error getting conversation history: {e}")
+        return {"error": str(e)}, 500
+
+@app.route('/clear_conversation', methods=['POST'])
+def clear_conversation():
+    """Clear the conversation history."""
+    if claude_agent is None:
+        return {"error": "Agent not initialized"}, 500
+    
+    thread_id = "webapp_conversation"
+    success = claude_agent.clear_conversation(thread_id)
+    
+    if success:
+        return {"message": "Conversation cleared successfully"}
+    else:
+        return {"error": "Failed to clear conversation (not supported by current checkpointer)"}, 400
+
+@app.route('/status')
+def status():
+    """Get the system status including checkpointer information."""
+    if claude_agent is None:
+        return {"error": "Agent not initialized"}, 500
+    
+    checkpointer_info = claude_agent.get_checkpointer_info()
+    
+    status_info = {
+        "agent_initialized": claude_agent is not None,
+        "model": os.getenv("CLAUDE_MODEL", "Not set"),
+        "checkpointer": checkpointer_info,
+        "environment": {
+            "has_anthropic_key": bool(os.getenv("ANTHROPIC_API_KEY")),
+            "has_mongodb_uri": bool(os.getenv("MONGODB_URI"))
+        }
+    }
+    
+    return status_info
+
 @socketio.on('connect')
 def handle_connect():
     logger.info('Client connected')
@@ -130,18 +178,18 @@ def handle_message(data):
         socketio.emit('response_end')
         return
     
-    # Stream the response from Claude using LangGraph
-    # Pass just the current user message - LangGraph manages conversation state
+    # Stream the response from Claude using LangGraph with built-in memory
+    # The agent now manages conversation state internally via checkpointers
     assistant_response = ""
     try:
         logger.info("Starting streaming response from Claude using LangGraph")
-        # Create a simple history with just this message
-        simple_history = [{"role": "user", "text": user_message}]
-        for chunk in claude_agent.chat_stream(simple_history, system_prompt):
+        # Use a consistent thread_id for the conversation - you might want to use session ID
+        thread_id = "webapp_conversation"  # In production, use session ID or user ID
+        
+        for chunk in claude_agent.chat_stream(user_message, system_prompt, thread_id):
             if chunk:
-                new_text = chunk
-                assistant_response += new_text
-                socketio.emit('response_chunk', {'chunk': new_text})
+                assistant_response += chunk
+                socketio.emit('response_chunk', {'chunk': chunk})
     except Exception as e:
         error_msg = str(e)
         stack_trace = traceback.format_exc()
@@ -153,9 +201,8 @@ def handle_message(data):
     if not assistant_response and claude_agent:
         logger.info("Streaming failed, trying non-streaming API call")
         try:
-            # Create a simple history with just this message
-            simple_history = [{"role": "user", "text": user_message}]
-            assistant_response = claude_agent.chat(simple_history, system_prompt)
+            thread_id = "webapp_conversation"
+            assistant_response = claude_agent.chat(user_message, system_prompt, thread_id)
             socketio.emit('response_chunk', {'chunk': assistant_response})
         except Exception as e:
             error_msg = str(e)

@@ -6,6 +6,9 @@ langchain-anthropic==0.3.13
 langchain-core==0.3.59
 langgraph==0.4.3
 
+# LangGraph Checkpointers
+langgraph-checkpoint-mongodb
+
 # Web Framework
 flask==2.3.3
 flask-socketio==5.3.6
