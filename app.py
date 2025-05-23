@@ -1,7 +1,7 @@
 import os
 import traceback
 import logging
-from flask import Flask, render_template, session
+from flask import Flask, render_template
 from flask_socketio import SocketIO
 import secrets
 from dotenv import load_dotenv
@@ -91,28 +91,16 @@ except Exception as e:
     logger.error(traceback.format_exc())
     claude_agent = None # Ensure it's defined but not usable
 
-# Store chat history in session
-def get_chat_history():
-    if 'chat_history' not in session:
-        session['chat_history'] = []
-    return session['chat_history']
-
-def add_to_chat_history(role, text):
-    chat_history = get_chat_history()
-    chat_history.append({"role": role, "text": text})
-    session['chat_history'] = chat_history
-    session.modified = True
-
 @app.route('/')
 def index():
-    # Get the chat history from the session
-    chat_history = get_chat_history()
+    # LangGraph manages conversation state - no need for session-based chat history
     
     # Get the model name from the environment variables
     current_model_for_ui = os.getenv("CLAUDE_MODEL", "(model not set)")
     logger.info(f"Current model for UI: {current_model_for_ui}")
     
-    return render_template('index.html', chat_history=chat_history, model=current_model_for_ui)
+    # Pass empty chat history to template - frontend will manage display
+    return render_template('index.html', chat_history=[], model=current_model_for_ui)
 
 @socketio.on('connect')
 def handle_connect():
@@ -127,12 +115,6 @@ def handle_message(data):
     # Get the message from the data
     user_message = data.get('message', '')
     logger.info(f"Received user message: {user_message[:30]}...")
-    
-    # Add the user message to the chat history
-    add_to_chat_history('user', user_message)
-    
-    # Get the chat history in the format needed for the LangGraph agent
-    chat_history = get_chat_history()
     
     # Create a system prompt
     system_prompt = "You are Claude, a helpful and friendly AI assistant. Be concise in your responses."
@@ -149,10 +131,13 @@ def handle_message(data):
         return
     
     # Stream the response from Claude using LangGraph
+    # Pass just the current user message - LangGraph manages conversation state
     assistant_response = ""
     try:
         logger.info("Starting streaming response from Claude using LangGraph")
-        for chunk in claude_agent.chat_stream(chat_history, system_prompt):
+        # Create a simple history with just this message
+        simple_history = [{"role": "user", "text": user_message}]
+        for chunk in claude_agent.chat_stream(simple_history, system_prompt):
             if chunk:
                 new_text = chunk
                 assistant_response += new_text
@@ -165,10 +150,12 @@ def handle_message(data):
         socketio.emit('response_chunk', {'chunk': f"Error: {error_msg}"})
     
     # Ensure we have a response even if streaming fails
-    if not assistant_response and claude_agent: # Check claude_agent again
+    if not assistant_response and claude_agent:
         logger.info("Streaming failed, trying non-streaming API call")
         try:
-            assistant_response = claude_agent.chat(chat_history, system_prompt)
+            # Create a simple history with just this message
+            simple_history = [{"role": "user", "text": user_message}]
+            assistant_response = claude_agent.chat(simple_history, system_prompt)
             socketio.emit('response_chunk', {'chunk': assistant_response})
         except Exception as e:
             error_msg = str(e)
@@ -178,12 +165,7 @@ def handle_message(data):
             assistant_response = f"Error: {error_msg}"
             socketio.emit('response_chunk', {'chunk': assistant_response})
     
-    # Add the complete assistant response to the chat history
-    if assistant_response: # Only add if we got something
-        add_to_chat_history('assistant', assistant_response)
-        logger.info("Completed assistant response")
-    else:
-        logger.warning("No assistant response was generated.")
+    logger.info("Completed assistant response")
     
     # Send the end of the response to the client
     socketio.emit('response_end')

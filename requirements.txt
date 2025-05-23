@@ -1,5 +1,6 @@
 # API and Environment
 python-dotenv==1.0.0
+anthropic>=0.51.0,<1.0.0
 langchain==0.3.25
 langchain-anthropic==0.3.13
 langchain-core==0.3.59
